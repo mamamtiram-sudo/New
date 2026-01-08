@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Pixel Night Shift - Static Update</title>
+    <style>
+        body { background-color: #111; margin: 0; overflow: hidden; display: flex; justify-content: center; align-items: center; height: 100vh; color: white; font-family: 'Courier New', Courier, monospace; touch-action: none; }
+        canvas { image-rendering: pixelated; width: 100%; height: 100%; max-width: 600px; aspect-ratio: 4/3; background: #000; border: 2px solid #333; }
+        .instruction { position: absolute; top: 10px; width: 100%; text-align: center; font-size: 12px; color: #777; }
+    </style>
+</head>
+<body>
+
+    <div class="instruction">Musuh di pintu = 4 Detik sebelum Jumpscare!</div>
+    <canvas id="gameCanvas" width="320" height="240"></canvas>
+
+<script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // --- STATE GAME ---
+    let state = "OFFICE"; 
+    let currentCam = 1;
+    let animatronicPos = 1; 
+    let moveTimer = 0;
+    let isDoorClosed = false;
+    let energy = 100;
+    let energyTimer = 0;
+
+    // --- VARIABEL BARU UNTUK WAKTU PINTU ---
+    let doorWaitTimer = 0; 
+
+    // --- VARIABEL WAKTU & JUMPSCARE ---
+    let gameHour = 0; 
+    let gameMinute = 0;
+    let timeTick = 0; 
+    let jumpscareTimer = 0; 
+
+    // --- DATA NAMA KAMERA ---
+    const camNames = {
+        1: "PANGGUNG UTAMA",
+        2: "GUDANG PERALATAN",
+        3: "LORONG KANAN (DEKAT)"
+    };
+
+    function drawRect(x, y, w, h, color) {
+        ctx.fillStyle = color;
+        ctx.fillRect(x, y, w, h);
+    }
+
+    function drawText(text, x, y, color="white", size="10px") {
+        ctx.fillStyle = color;
+        ctx.font = `${size} monospace`;
+        ctx.fillText(text, x, y);
+    }
+
+    // --- LOGIKA UTAMA ---
+    function update() {
+        if (state === "GAMEOVER" || state === "WIN") return;
+
+        // --- UPDATE JUMPSCARE ---
+        if (state === "JUMPSCARE") {
+            jumpscareTimer++;
+            if (jumpscareTimer > 180) {
+                state = "GAMEOVER";
+            }
+            return; 
+        }
+
+        // --- UPDATE WAKTU ---
+        timeTick++;
+        if (timeTick >= 30) { 
+            timeTick = 0;
+            gameMinute++;
+            if (gameMinute >= 60) {
+                gameMinute = 0;
+                gameHour++;
+            }
+        }
+
+        if (gameHour >= 6) {
+            state = "WIN";
+            return;
+        }
+
+        // --- UPDATE ENERGI ---
+        energyTimer++;
+        let isUsingPower = isDoorClosed || state === "CAMERA";
+        let drainSpeed = isUsingPower ? 90 : 180; 
+
+        if (energyTimer > drainSpeed) {
+            energy -= 1;
+            energyTimer = 0;
+        }
+
+        if (energy <= 0) {
+            energy = 0;
+            isDoorClosed = false;
+            if (state === "CAMERA") state = "OFFICE";
+            if (Math.random() > 0.95) triggerJumpscare();
+        }
+
+        // --- SERANGAN PINTU ---
+        if (animatronicPos === 3 && !isDoorClosed) {
+            doorWaitTimer++; 
+            if (doorWaitTimer > 240) {
+                triggerJumpscare();
+            }
+        } else {
+            doorWaitTimer = 0;
+        }
+
+        // --- PERGERAKAN MUSUH (AI) ---
+        let difficulty = 400 - (gameHour * 40); 
+        
+        moveTimer++;
+        if (moveTimer > difficulty) { 
+            moveTimer = 0;
+            if (Math.random() > 0.4) { 
+                if (animatronicPos === 3) {
+                    if (isDoorClosed) {
+                        animatronicPos = 1; 
+                        doorWaitTimer = 0; 
+                    } 
+                } else {
+                    animatronicPos++; 
+                }
+            }
+        }
+    }
+
+    function triggerJumpscare() {
+        state = "JUMPSCARE";
+        jumpscareTimer = 0;
+    }
+
+    function draw() {
+        ctx.fillStyle = "black";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        if (state === "OFFICE") {
+            drawOffice();
+        } else if (state === "CAMERA") {
+            drawCamera();
+        } else if (state === "JUMPSCARE") {
+            drawJumpscare();
+        } else if (state === "GAMEOVER") {
+            drawGameOver();
+        } else if (state === "WIN") {
+            drawWin();
+        }
+
+        if (state === "OFFICE" || state === "CAMERA") {
+            let powerColor = (isDoorClosed || state === "CAMERA") ? "#FFFF00" : "#0F0";
+            if (energy < 20) powerColor = "red";
+            
+            drawText(`POWER: ${energy}%`, 10, 20, powerColor, "12px");
+            if (isDoorClosed || state === "CAMERA") drawText("⚡", 85, 20, "yellow", "12px");
+
+            let displayHour = gameHour === 0 ? 12 : gameHour;
+            drawText(`${displayHour} AM`, 270, 20, "white", "12px");
+        }
+    }
+
+    // --- EFEK STATIS / DISTRAKSI TV ---
+    function drawStaticEffect() {
+        // Garis scanline horizontal (seperti TV tabung rusak)
+        for (let i = 0; i < 5; i++) {
+            let y = Math.random() * canvas.height;
+            let h = Math.random() * 20 + 2; // Tinggi garis acak
+            ctx.fillStyle = `rgba(255, 255, 255, ${Math.random() * 0.1})`; // Transparansi rendah
+            ctx.fillRect(0, y, canvas.width, h);
+        }
+
+        // Bintik-bintik noise (Grain)
+        for (let i = 0; i < 100; i++) {
+            let x = Math.random() * canvas.width;
+            let y = Math.random() * canvas.height;
+            let size = Math.random() * 2 + 1;
+            ctx.fillStyle = `rgba(200, 255, 200, ${Math.random() * 0.3})`; // Sedikit kehijauan
+            ctx.fillRect(x, y, size, size);
+        }
+        
+        // Garis flicker besar sesekali
+        if (Math.random() > 0.95) {
+            ctx.fillStyle = "rgba(0, 255, 0, 0.1)";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+    }
+
+    function drawJumpscare() {
+        let shakeX = (Math.random() * 20) - 10;
+        let shakeY = (Math.random() * 20) - 10;
+
+        if (Math.random() > 0.5) {
+            ctx.fillStyle = "#200"; 
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+
+        function drawFace(offsetX, offsetY, color) {
+            let cx = (canvas.width / 2) + offsetX + shakeX;
+            let cy = (canvas.height / 2) + offsetY + shakeY;
+
+            ctx.fillStyle = color;
+            ctx.fillRect(cx - 80, cy - 100, 160, 180); 
+            ctx.fillRect(cx - 90, cy - 120, 30, 40);
+            ctx.fillRect(cx + 60, cy - 120, 30, 40);
+            ctx.fillRect(cx - 70, cy + 60, 140, 40);
+
+            ctx.fillStyle = "black";
+            ctx.fillRect(cx - 60, cy - 50, 40, 40); 
+            ctx.fillRect(cx + 20, cy - 50, 40, 40); 
+            
+            ctx.fillStyle = "white";
+            if (Math.random() > 0.1) ctx.fillRect(cx - 45, cy - 35, 10, 10);
+            if (Math.random() > 0.1) ctx.fillRect(cx + 35, cy - 35, 10, 10);
+
+            ctx.fillStyle = "black";
+            ctx.fillRect(cx - 50, cy + 20, 100, 50);
+
+            ctx.fillStyle = "#CCC";
+            for(let i=0; i<5; i++) {
+                ctx.fillRect(cx - 40 + (i*20), cy + 20, 10, 10);
+                ctx.fillRect(cx - 40 + (i*20), cy + 60, 10, 10);
+            }
+        }
+
+        ctx.globalAlpha = 0.5;
+        drawFace(-5, 0, "blue");
+        drawFace(5, 0, "green");
+        ctx.globalAlpha = 0.9;
+        drawFace(0, 0, "#FF0000"); 
+        ctx.globalAlpha = 1.0; 
+        
+        // Tambahkan efek statis saat jumpscare juga agar lebih seram
+        drawStaticEffect();
+    }
+
+    function drawOffice() {
+        drawRect(0, 0, 320, 240, "#222"); 
+        drawRect(80, 40, 160, 160, "#000"); 
+
+        drawRect(100, 210, 120, 25, "#444");
+        drawText("CAMERA", 135, 227, "white");
+
+        drawRect(10, 100, 50, 40, isDoorClosed ? "#0F0" : "#F00");
+        drawText("DOOR", 18, 125, "black", "10px");
+
+        if (isDoorClosed) {
+            drawRect(80, 40, 160, 160, "#555");
+            drawRect(85, 50, 150, 5, "#333");
+        } else {
+            if (animatronicPos === 3) {
+                if (doorWaitTimer < 180 || Math.floor(Date.now() / 100) % 2 === 0) {
+                    drawRect(130, 100, 20, 20, "red"); 
+                    drawRect(170, 100, 20, 20, "red");
+                    drawRect(145, 130, 30, 5, "white");
+                }
+            }
+        }
+    }
+
+    function drawCamera() {
+        drawRect(0, 0, 320, 240, "#001100"); 
+        
+        // --- GAMBAR OBJEK DI KAMERA ---
+        if (currentCam === 1 && animatronicPos === 1) drawRect(140, 100, 40, 40, "red");
+        if (currentCam === 2 && animatronicPos === 2) drawRect(100, 80, 40, 40, "red");
+        if (currentCam === 3 && animatronicPos === 3) drawRect(80, 50, 160, 150, "red");
+
+        // --- LAYER EFEK STATIS (DI DEPAN OBJEK, DI BELAKANG UI) ---
+        drawStaticEffect();
+
+        // --- UI TEXT KAMERA ---
+        drawText(`CAM 0${currentCam}`, 20, 40, "#0F0", "15px");
+        drawText(camNames[currentCam], 20, 55, "#0A0", "10px"); // NAMA RUANGAN DITAMBAHKAN
+
+        // Indikator REC (Berkedip)
+        if (Math.floor(Date.now() / 500) % 2 === 0) {
+            drawRect(280, 25, 10, 10, "red");
+            drawText("REC", 255, 33, "red", "10px");
+        }
+
+        // Map Mini
+        drawRect(240, 150, 70, 80, "rgba(0, 255, 0, 0.2)");
+        drawRect(250, 160, 20, 20, currentCam === 1 ? "#0F0" : "#050");
+        drawRect(280, 160, 20, 20, currentCam === 2 ? "#0F0" : "#050");
+        drawRect(265, 190, 20, 20, currentCam === 3 ? "#0F0" : "#050");
+
+        drawRect(100, 210, 120, 25, "#444");
+        drawText("CLOSE", 140, 227, "white");
+    }
+
+    function drawGameOver() {
+        ctx.fillStyle = "black";
+        ctx.fillRect(0, 0, 320, 240);
+        drawStaticEffect(); // Sedikit efek statis di game over
+        drawText("GAME OVER", 90, 100, "red", "30px");
+        drawText("KAMU TERTANGKAP", 110, 130, "white", "10px");
+        drawText("TAP UNTUK ULANG", 105, 200, "gray");
+    }
+
+    function drawWin() {
+        ctx.fillStyle = "black";
+        ctx.fillRect(0, 0, 320, 240);
+        drawText("6:00 AM", 110, 90, "#FFFF00", "30px");
+        drawText("SELAMAT! ANDA BERTAHAN", 80, 130, "white", "12px");
+        drawText("Sisa Power: " + energy + "%", 110, 150, "#0F0", "12px");
+        drawText("TAP UNTUK MAIN LAGI", 95, 200, "gray");
+    }
+
+    // --- INPUT ---
+    canvas.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        handleInput(e.touches[0]);
+    }, {passive: false});
+
+    canvas.addEventListener('mousedown', handleInput);
+
+    function handleInput(e) {
+        if (state === "JUMPSCARE") return;
+
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        const x = (e.clientX - rect.left) * scaleX;
+        const y = (e.clientY - rect.top) * scaleY;
+
+        if (state === "GAMEOVER" || state === "WIN") {
+            energy = 100; 
+            animatronicPos = 1; 
+            state = "OFFICE"; 
+            gameHour = 0; 
+            gameMinute = 0;
+            doorWaitTimer = 0; 
+            isDoorClosed = false; 
+            return;
+        }
+
+        if (y > 200 && x > 100 && x < 220) {
+            state = state === "OFFICE" ? "CAMERA" : "OFFICE";
+        }
+
+        if (state === "OFFICE" && x > 10 && x < 60 && y > 100 && y < 140) {
+            if (energy > 0) isDoorClosed = !isDoorClosed;
+        }
+
+        if (state === "CAMERA") {
+            if (x > 250 && x < 270 && y > 160 && y < 180) currentCam = 1;
+            if (x > 280 && x < 300 && y > 160 && y < 180) currentCam = 2;
+            if (x > 265 && x < 285 && y > 190 && y < 210) currentCam = 3;
+        }
+    }
+
+    function loop() {
+        update();
+        draw();
+        requestAnimationFrame(loop);
+    }
+    loop();
+</script>
+</body>
+</html>
